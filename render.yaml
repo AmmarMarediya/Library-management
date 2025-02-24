@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: library
+    plan: free
+    runtime: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn core.wsgi:application"
