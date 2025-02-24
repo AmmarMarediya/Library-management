@@ -1,4 +1,4 @@
-# Library-Management-System-Django
+# Library-Management
 A Simple Library Management System that helps in managing a library.
 
 ### Available Functionalities:
@@ -13,7 +13,7 @@ Definition: CRUD(Create, Read, Update and Delete)
 ### To run the project locally, follow the following instructions:
 - Clone the repository
   ```sql
-  git clone https://github.com/AmmarMarediya/library-management.git
+  git clone https://github.com/AmmarMarediya/Library-management.git
   ```
 - Navigate to the project directory.
   ```sql
