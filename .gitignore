@@ -168,3 +168,5 @@ cython_debug/
 pyproject.toml
 setup.cfg
 .pre-commit-config.yaml
+.idea/
+
