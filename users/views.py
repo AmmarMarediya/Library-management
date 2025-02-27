@@ -1,3 +1,4 @@
+#users/views.py
 import logging
 
 from django.contrib.auth import authenticate, login, logout
@@ -34,9 +35,14 @@ class LoginView(View):
                 logger.info(f"User {user.email} logged in")
                 redirect_url = request.GET.get("next", "home")
 
-                return redirect(redirect_url)
-            logger.warning(f"Invalid login attempt for {email}")
-            form.add_error(None, "Invalid email or password")
+                # Admin filter apply kiya yahan
+                if user.is_staff:  # Agar admin hai to hi redirect kare
+                    return redirect(redirect_url)
+                else:
+                    form.add_error(None, "Only admins can log in.")
+            else:
+                logger.warning(f"Invalid login attempt for {email}")
+                form.add_error(None, "Invalid email or password")
 
         logger.warning(f"Invalid login attempt: {form.errors}")
 
@@ -62,9 +68,12 @@ class RegisterView(View):
             password = form.cleaned_data.get("password")
 
             user.set_password(password)
+
+            # Sirf admin user banaye (agar ye requirement hai)
+            user.is_staff = True
             user.save()
 
-            logger.info(f"User {user.email} registered")
+            logger.info(f"Admin {user.email} registered")
 
             return redirect("login")
         logger.warning(f"Invalid registration attempt: {form.errors}")

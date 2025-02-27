@@ -1,3 +1,4 @@
+# users/models.py
 import uuid
 
 from django.contrib.auth.models import AbstractUser, BaseUserManager
@@ -5,18 +6,11 @@ from django.db import models
 
 
 class AbstractBaseModel(models.Model):
-    id = models.CharField(max_length=255, primary_key=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         abstract = True
-
-    def save(self, *args, **kwargs):
-        if not self.id:
-            table_name = self.__class__.__name__.lower()
-            self.id = f"{table_name}-{str(uuid.uuid4())}"
-        super().save(*args, **kwargs)
 
 
 class CustomUserManager(BaseUserManager):
@@ -43,7 +37,7 @@ class CustomUserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
-class Librarian(AbstractUser, AbstractBaseModel):
+class Librarian(AbstractUser):
     email = models.EmailField(unique=True)
     username = models.CharField(max_length=255, null=True, blank=True)
 

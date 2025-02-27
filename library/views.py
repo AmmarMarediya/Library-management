@@ -1,3 +1,4 @@
+#library/views.py
 import logging
 
 from django.contrib.auth.decorators import login_required
@@ -36,10 +37,10 @@ class HomeView(View):
     """
 
     def get(self, request, *args, **kwargs):
-        members = Member.objects.all()
-        books = Book.objects.all()
-        borrowed_books = BorrowedBook.objects.filter(returned=False)
-        overdue_books = BorrowedBook.objects.filter(return_date__lt=timezone.now().date(), returned=False)
+        members = Member.objects.filter(admin=request.user)
+        books = Book.objects.filter(admin=request.user)
+        borrowed_books = BorrowedBook.objects.filter(returned=False, admin=request.user)
+        overdue_books = BorrowedBook.objects.filter(return_date__lt=timezone.now().date(), returned=False, admin=request.user)
 
         total_members = members.count()
         total_books = books.count()
@@ -48,7 +49,7 @@ class HomeView(View):
 
         recently_added_books = books.order_by("-created_at")[:4]
 
-        total_amount = sum([payment.amount for payment in Transaction.objects.all()])
+        total_amount = sum([payment.amount for payment in Transaction.objects.filter(admin=request.user)])
         overdue_amount = sum([book.fine for book in overdue_books])
 
         context = {
@@ -64,6 +65,8 @@ class HomeView(View):
         return render(request, "index.html", context)
 
 
+
+
 @method_decorator(login_required, name="dispatch")
 class AddMemberView(View):
     """
@@ -74,37 +77,40 @@ class AddMemberView(View):
 
     def get(self, request, *args, **kwargs):
         form = AddMemberForm()
-        return render(request, "members/add-member.html", {"form": form})
+        return render(request, "members/add-member.html", {"form": form, "admin": request.user})
 
     def post(self, request, *args, **kwargs):
         form = AddMemberForm(request.POST)
 
         if form.is_valid():
-            form.save()
+            member = form.save(commit=False)
+            member.admin = request.user
+            member.save()
             logger.info("New member added successfully.")
             return redirect("members")
 
         logger.error(f"Error occurred while adding member: {form.errors}")
 
-        return render(request, "members/add-member.html", {"form": form})
+        return render(request, "members/add-member.html", {"form": form, "admin": request.user})
 
 
 @method_decorator(login_required, name="dispatch")
 class MembersListView(View):
     """
     Members List view for the library management system.
-    get(): Returns the list of members in the library.
-    post(): Returns the list of members in the library based on the search query.
+    get(): Returns the list of members associated with the logged-in admin.
+    post(): Returns the filtered list of members based on the search query and admin.
     """
 
     def get(self, request, *args, **kwargs):
-        members = Member.objects.all()
+        members = Member.objects.filter(admin=request.user)
         return render(request, "members/list-members.html", {"members": members})
 
     def post(self, request, *args, **kwargs):
         query = request.POST.get("query")
-        members = Member.objects.filter(name__icontains=query)
+        members = Member.objects.filter(name__icontains=query, admin=request.user)
         return render(request, "members/list-members.html", {"members": members})
+
 
 
 @method_decorator(login_required, name="dispatch")
@@ -116,12 +122,18 @@ class UpdateMemberDetailsView(View):
     """
 
     def get(self, request, *args, **kwargs):
-        member = Member.objects.get(pk=kwargs["pk"])
+        member = Member.objects.filter(pk=kwargs["pk"], admin=request.user).first()
+        if not member:
+            logger.error("Member not found or unauthorized access.")
+            return redirect("members")
         form = UpdateMemberForm(instance=member)
         return render(request, "members/update-member.html", {"form": form, "member": member})
 
     def post(self, request, *args, **kwargs):
-        member = Member.objects.get(pk=kwargs["pk"])
+        member = Member.objects.filter(pk=kwargs["pk"], admin=request.user).first()
+        if not member:
+            logger.error("Member not found or unauthorized access.")
+            return redirect("members")
         form = UpdateMemberForm(request.POST, instance=member)
 
         if form.is_valid():
@@ -134,6 +146,7 @@ class UpdateMemberDetailsView(View):
         return render(request, "members/update-member.html", {"form": form, "member": member})
 
 
+
 @method_decorator(login_required, name="dispatch")
 class DeleteMemberView(View):
     """
@@ -142,10 +155,11 @@ class DeleteMemberView(View):
     """
 
     def get(self, request, *args, **kwargs):
-        member = Member.objects.get(pk=kwargs["pk"])
+        member = Member.objects.get(pk=kwargs["pk"], admin=request.user)
         member.delete()
         logger.info("Member deleted successfully.")
         return redirect("members")
+
 
 
 @method_decorator(login_required, name="dispatch")
@@ -165,6 +179,7 @@ class AddBookView(View):
 
         if form.is_valid():
             book = form.save(commit=False)
+            book.admin = request.user  # Admin set as current user
             if book.quantity == 0:
                 book.status = "not-available"
             else:
@@ -179,6 +194,7 @@ class AddBookView(View):
         return render(request, "books/add-book.html", {"form": form})
 
 
+
 @method_decorator(login_required, name="dispatch")
 class BooksListView(View):
     """
@@ -188,12 +204,12 @@ class BooksListView(View):
     """
 
     def get(self, request, *args, **kwargs):
-        books = Book.objects.all()
+        books = Book.objects.filter(admin=request.user)
         return render(request, "books/list-books.html", {"books": books})
 
     def post(self, request, *args, **kwargs):
         query = request.POST.get("query")
-        books = Book.objects.filter(Q(title__icontains=query) | Q(author__icontains=query))
+        books = Book.objects.filter(Q(title__icontains=query) | Q(author__icontains=query), admin=request.user)
         return render(request, "books/list-books.html", {"books": books})
 
 
@@ -206,12 +222,12 @@ class UpdateBookDetailsView(View):
     """
 
     def get(self, request, *args, **kwargs):
-        book = Book.objects.get(pk=kwargs["pk"])
+        book = Book.objects.get(pk=kwargs["pk"], admin=request.user)
         form = AddBookForm(instance=book)
         return render(request, "books/update-book.html", {"form": form, "book": book})
 
     def post(self, request, *args, **kwargs):
-        book = Book.objects.get(pk=kwargs["pk"])
+        book = Book.objects.get(pk=kwargs["pk"], admin=request.user)
         form = AddBookForm(request.POST, instance=book)
 
         if form.is_valid():
@@ -220,6 +236,7 @@ class UpdateBookDetailsView(View):
                 book.status = "not-available"
             else:
                 book.status = "available"
+            book.admin = request.user
             book.save()
 
             logger.info("Book details updated successfully.")
@@ -228,6 +245,7 @@ class UpdateBookDetailsView(View):
         logger.error(f"Error occurred while updating book: {form.errors}")
 
         return render(request, "books/update-book.html", {"form": form, "book": book})
+
 
 
 @method_decorator(login_required, name="dispatch")
@@ -258,7 +276,6 @@ class LendBookView(View):
     def get(self, request, *args, **kwargs):
         form = LendBookForm()
         payment_form = PaymentForm()
-
         return render(request, "books/lend-book.html", {"form": form, "payment_form": payment_form})
 
     def post(self, request, *args, **kwargs):
@@ -275,7 +292,7 @@ class LendBookView(View):
                 books_ids = request.POST.getlist("book")
                 amount = 0
                 for book_id in books_ids:
-                    book = Book.objects.get(pk=book_id)
+                    book = Book.objects.get(pk=book_id, admin=request.user)
                     BorrowedBook.objects.create(
                         member=lent_book.member,
                         book=book,
@@ -290,7 +307,12 @@ class LendBookView(View):
 
                     amount += book.borrowing_fee
 
-                Transaction.objects.create(member=lent_book.member, amount=amount, payment_method=payment_method)
+                Transaction.objects.create(
+                    member=lent_book.member,
+                    amount=amount,
+                    payment_method=payment_method,
+                    admin=request.user
+                )
                 logger.info("Payment made successfully.")
 
                 return redirect("lent-books")
@@ -298,7 +320,6 @@ class LendBookView(View):
         logger.error(f"Error occurred while issuing book: {form.errors}")
 
         return render(request, "books/lend-book.html", {"form": form, "payment_form": payment_form})
-
 
 @method_decorator(login_required, name="dispatch")
 class LendMemberBookView(View):
@@ -314,7 +335,7 @@ class LendMemberBookView(View):
     """
 
     def get(self, request, *args, **kwargs):
-        member = Member.objects.get(pk=kwargs["pk"])
+        member = Member.objects.get(pk=kwargs["pk"], admin=request.user)
         form = LendMemberBookForm()
         payment_form = PaymentForm()
         return render(
@@ -322,7 +343,7 @@ class LendMemberBookView(View):
         )
 
     def post(self, request, *args, **kwargs):
-        member = Member.objects.get(pk=kwargs["pk"])
+        member = Member.objects.get(pk=kwargs["pk"], admin=request.user)
         form = LendMemberBookForm(request.POST)
         payment_form = PaymentForm(request.POST)
 
@@ -336,7 +357,7 @@ class LendMemberBookView(View):
                 book_ids = request.POST.getlist("book")
                 amount = 0
                 for book_id in book_ids:
-                    book = Book.objects.get(pk=book_id)
+                    book = Book.objects.get(pk=book_id, admin=request.user)
                     BorrowedBook.objects.create(
                         member=member, book=book, return_date=lended_book.return_date, fine=lended_book.fine
                     )
@@ -360,6 +381,7 @@ class LendMemberBookView(View):
         )
 
 
+
 @method_decorator(login_required, name="dispatch")
 class LentBooksListView(View):
     """
@@ -369,15 +391,19 @@ class LentBooksListView(View):
     """
 
     def get(self, request, *args, **kwargs):
-        books = BorrowedBook.objects.select_related("member", "book")
+        books = BorrowedBook.objects.filter(admin=request.user).select_related("member", "book")
+
         return render(request, "books/lent-books.html", {"books": books})
 
     def post(self, request, *args, **kwargs):
         query = request.POST.get("query")
         books = BorrowedBook.objects.filter(
-            Q(book__title__icontains=query) | Q(book__author__icontains=query)
+            Q(book__title__icontains=query) | Q(book__author__icontains=query), 
+            admin=request.user
         ).select_related("member", "book")
         return render(request, "books/lent-books.html", {"books": books})
+
+
 
 
 @method_decorator(login_required, name="dispatch")
@@ -389,12 +415,18 @@ class UpdateBorrowedBookView(View):
     """
 
     def get(self, request, *args, **kwargs):
-        book = BorrowedBook.objects.get(pk=kwargs["pk"])
+        book = BorrowedBook.objects.filter(pk=kwargs["pk"], admin=request.user).first()
+        if not book:
+            logger.error("Book not found or unauthorized access.")
+            return redirect("lent-books")
         form = UpdateBorrowedBookForm(instance=book)
         return render(request, "books/update-borrowed-book.html", {"form": form, "book": book})
 
     def post(self, request, *args, **kwargs):
-        book = BorrowedBook.objects.get(pk=kwargs["pk"])
+        book = BorrowedBook.objects.filter(pk=kwargs["pk"], admin=request.user).first()
+        if not book:
+            logger.error("Book not found or unauthorized access.")
+            return redirect("lent-books")
         form = UpdateBorrowedBookForm(request.POST, instance=book)
 
         if form.is_valid():
@@ -405,7 +437,6 @@ class UpdateBorrowedBookView(View):
 
         return render(request, "books/update-borrowed-book.html", {"form": form, "book": book})
 
-
 @method_decorator(login_required, name="dispatch")
 class DeleteBorrowedBookView(View):
     """
@@ -414,7 +445,7 @@ class DeleteBorrowedBookView(View):
     """
 
     def get(self, request, *args, **kwargs):
-        borrowed_book = BorrowedBook.objects.get(pk=kwargs["pk"])
+        borrowed_book = BorrowedBook.objects.get(pk=kwargs["pk"], admin=request.user)
 
         book = borrowed_book.book
         book.quantity += 1
@@ -437,7 +468,7 @@ class ReturnBookView(View):
     """
 
     def get(self, request, *args, **kwargs):
-        borrowed_book = BorrowedBook.objects.get(pk=kwargs["pk"])
+        borrowed_book = BorrowedBook.objects.get(pk=kwargs["pk"], admin=request.user)
         if borrowed_book.return_date < timezone.now().date():
             return redirect("return-book-fine", pk=borrowed_book.pk)
 
@@ -465,12 +496,12 @@ class ReturnBookFineView(View):
 
     def get(self, request, *args, **kwargs):
         form = PaymentForm()
-        book = BorrowedBook.objects.get(pk=kwargs["pk"])
+        book = BorrowedBook.objects.get(pk=kwargs["pk"], admin=request.user)
         return render(request, "books/return-book-fine.html", {"book": book, "form": form})
 
     def post(self, request, *args, **kwargs):
         form = PaymentForm(request.POST)
-        book = BorrowedBook.objects.get(pk=kwargs["pk"])
+        book = BorrowedBook.objects.get(pk=kwargs["pk"], admin=request.user)
 
         if form.is_valid():
             payment_method = form.cleaned_data["payment_method"]
@@ -501,14 +532,15 @@ class ListPaymentsView(View):
     """
 
     def get(self, request, *args, **kwargs):
-        payments = Transaction.objects.select_related("member")
+        payments = Transaction.objects.filter(admin=request.user).select_related("member")
         return render(request, "payments/list-payments.html", {"payments": payments})
 
     def post(self, request, *args, **kwargs):
         query = request.POST.get("query")
-        payments = Transaction.objects.filter(member__name__icontains=query).select_related("member")
+        payments = Transaction.objects.filter(
+            Q(member__name__icontains=query) & Q(admin=request.user)
+        ).select_related("member")
         return render(request, "payments/list-payments.html", {"payments": payments})
-
 
 @method_decorator(login_required, name="dispatch")
 class DeletePaymentView(View):
@@ -518,12 +550,17 @@ class DeletePaymentView(View):
     """
 
     def get(self, request, *args, **kwargs):
-        payment = Transaction.objects.get(pk=kwargs["pk"])
-        payment.delete()
-        logger.info("Payment deleted successfully.")
+        payment = Transaction.objects.filter(pk=kwargs["pk"], admin=request.user).first()
+        if payment:
+            payment.delete()
+            logger.info("Payment deleted successfully.")
+        else:
+            logger.warning("No payment found or unauthorized access.")
         return redirect("payments")
 
 
+
+@method_decorator(login_required, name="dispatch")
 class OverdueBooksView(View):
     """
     Overdue Books view for the library management system.
@@ -533,7 +570,9 @@ class OverdueBooksView(View):
 
     def get(self, request, *args, **kwargs):
         overdue_books = BorrowedBook.objects.filter(
-            return_date__lt=timezone.now().date(), returned=False
+            return_date__lt=timezone.now().date(),
+            returned=False,
+            admin=request.user
         ).select_related("member", "book")
         return render(request, "books/overdue-books.html", {"books": overdue_books})
 
@@ -543,5 +582,6 @@ class OverdueBooksView(View):
             Q(book__title__icontains=query) | Q(book__author__icontains=query),
             return_date__lt=timezone.now().date(),
             returned=False,
+            admin=request.user
         ).select_related("member", "book")
         return render(request, "books/overdue-books.html", {"books": overdue_books})
