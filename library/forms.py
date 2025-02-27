@@ -75,7 +75,7 @@ class AddBookForm(forms.ModelForm):
 class LendBookForm(forms.ModelForm):
     book = forms.ModelChoiceField(
         label="Book / Books",
-        queryset=Book.objects.filter(quantity__gt=0),
+        queryset=Book.objects.none(),  # Initially empty, filtered in __init__
         empty_label=None,
         widget=forms.Select(
             attrs={"class": "form-control form-control-lg js-example-basic-multiple w-100", "multiple": "multiple"}
@@ -83,7 +83,7 @@ class LendBookForm(forms.ModelForm):
     )
 
     member = forms.ModelChoiceField(
-        queryset=Member.objects.all(),
+        queryset=Member.objects.none(),  # Initially empty, filtered in __init__
         empty_label=None,
         widget=forms.Select(attrs={"class": "form-control form-control-lg js-example-basic-single w-100"}),
     )
@@ -100,10 +100,18 @@ class LendBookForm(forms.ModelForm):
         model = BorrowedBook
         fields = ["book", "member", "return_date", "fine"]
 
+    def __init__(self, *args, **kwargs):
+        admin = kwargs.pop('admin', None)
+        super().__init__(*args, **kwargs)
+
+        if admin:
+            self.fields['book'].queryset = Book.objects.filter(admin=admin, quantity__gt=0)
+            self.fields['member'].queryset = Member.objects.filter(admin=admin)
+
 
 class LendMemberBookForm(forms.ModelForm):
     book = forms.ModelChoiceField(
-        queryset=Book.objects.filter(quantity__gt=0),
+        queryset=Book.objects.none(),  # Initially empty, filtered in __init__
         empty_label=None,
         widget=forms.Select(
             attrs={"class": "form-control form-control-lg js-example-basic-multiple w-100", "multiple": "multiple"}
@@ -121,6 +129,13 @@ class LendMemberBookForm(forms.ModelForm):
     class Meta:
         model = BorrowedBook
         fields = ["book", "return_date", "fine"]
+
+    def __init__(self, *args, **kwargs):
+        admin = kwargs.pop('admin', None)
+        super().__init__(*args, **kwargs)
+
+        if admin:
+            self.fields['book'].queryset = Book.objects.filter(admin=admin, quantity__gt=0)
 
 
 class UpdateBorrowedBookForm(forms.ModelForm):

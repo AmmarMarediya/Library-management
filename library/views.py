@@ -264,61 +264,69 @@ class DeleteBookView(View):
 
 @method_decorator(login_required, name="dispatch")
 class LendBookView(View):
-    """
-    Lend Book view for the library management system.
-    get(): Returns the lent book page with the LendBookForm and PaymentForm.
-    post(): Validates the form and lends the book to the member.
-            Several Books can be lent to the member at once.
-            if the member has exceeded the borrowing limit, an error message is displayed.
-            BorrowedBook and Transaction objects are created and the book quantity is updated.
-    """
 
     def get(self, request, *args, **kwargs):
-        form = LendBookForm()
+        form = LendBookForm(admin=request.user)  # Pass admin to filter dropdowns
         payment_form = PaymentForm()
         return render(request, "books/lend-book.html", {"form": form, "payment_form": payment_form})
 
     def post(self, request, *args, **kwargs):
-        form = LendBookForm(request.POST)
+        form = LendBookForm(request.POST, admin=request.user)  # Pass admin during form validation
         payment_form = PaymentForm(request.POST)
 
         if form.is_valid() and payment_form.is_valid():
             lent_book = form.save(commit=False)
+            
+            # Member Borrowing Limit Check
             if lent_book.member.amount_due > 500:
                 form.add_error(None, "Member has exceeded the borrowing limit.")
                 logger.error("Member has exceeded the borrowing limit.")
-            else:
-                payment_method = payment_form.cleaned_data["payment_method"]
-                books_ids = request.POST.getlist("book")
-                amount = 0
-                for book_id in books_ids:
+                return render(request, "books/lend-book.html", {"form": form, "payment_form": payment_form})
+
+            # Process Books Lending
+            payment_method = payment_form.cleaned_data["payment_method"]
+            books_ids = request.POST.getlist("book")
+            amount = 0
+
+            for book_id in books_ids:
+                try:
+                    # Filter books by admin
                     book = Book.objects.get(pk=book_id, admin=request.user)
+                    
+                    # Create Borrowed Book Entry
                     BorrowedBook.objects.create(
                         member=lent_book.member,
                         book=book,
                         return_date=lent_book.return_date,
                         fine=lent_book.fine,
+                        admin=request.user  # Set admin here
                     )
-                    logger.info("Book lent successfully.")
+                    logger.info(f"Book '{book.title}' lent successfully.")
 
+                    # Update Book Quantity
                     book.quantity -= 1
                     book.save()
-                    logger.info("Book Quantity updated successfully.")
+                    logger.info(f"Book '{book.title}' quantity updated successfully.")
 
                     amount += book.borrowing_fee
 
-                Transaction.objects.create(
-                    member=lent_book.member,
-                    amount=amount,
-                    payment_method=payment_method,
-                    admin=request.user
-                )
-                logger.info("Payment made successfully.")
+                except Book.DoesNotExist:
+                    logger.error(f"Book with ID {book_id} does not exist for this admin.")
+                    form.add_error(None, "Invalid book selected.")
+                    return render(request, "books/lend-book.html", {"form": form, "payment_form": payment_form})
 
-                return redirect("lent-books")
+            # Create Transaction with Admin Mapping
+            Transaction.objects.create(
+                member=lent_book.member,
+                amount=amount,
+                payment_method=payment_method,
+                admin=request.user  # Map admin to transaction
+            )
+            logger.info("Payment made successfully.")
+
+            return redirect("lent-books")
 
         logger.error(f"Error occurred while issuing book: {form.errors}")
-
         return render(request, "books/lend-book.html", {"form": form, "payment_form": payment_form})
 
 @method_decorator(login_required, name="dispatch")
