@@ -103,12 +103,16 @@ CATEGORY_CHOICES = (
     ("religion", "Religion"),
     ("children", "Children"),
     ("other", "Other"),
+    ("education", "Education"),
+    ("manga", "Manga"),
 )
 
 PAYMENT_METHOD_CHOICES = (
-    ("cash", "Cash"),
-    ("mpesa", "Mpesa"),
-    ("card", "Card"),
+    ("Cash", "Cash"),
+    ("Gpay", "Gpay"),
+    ("PhonePay", "PhonePay"),
+    ("Paytm", "Paytm"),
+    ("Card", "Card"),
 )
 
 # 🟢 Member Model - Librarian ko add kiya

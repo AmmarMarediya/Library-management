@@ -7,7 +7,9 @@ def greeting(request):
         greeting = "Morning"
     elif current_time.hour < 16:
         greeting = "Afternoon"
-    else:
+    elif current_time.hour < 19:
         greeting = "Evening"
+    else:
+        greeting = "Night"
 
     return {"greeting": greeting}
