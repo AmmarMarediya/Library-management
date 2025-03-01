@@ -93,18 +93,12 @@ STATUS_CHOICES = (
 )
 
 CATEGORY_CHOICES = (
-    ("fiction", "Fiction"),
-    ("non-fiction", "Non-Fiction"),
-    ("biography", "Biography"),
-    ("history", "History"),
-    ("science", "Science"),
-    ("poetry", "Poetry"),
-    ("drama", "Drama"),
-    ("religion", "Religion"),
-    ("children", "Children"),
-    ("other", "Other"),
-    ("education", "Education"),
-    ("manga", "Manga"),
+    ("Programming", "Programming"),
+    ("Technology", "Technology"),
+    ("Science", "Science"),
+    ("History", "History"),
+    ("Story", "Story"),
+    ("Other", "Other"),
 )
 
 PAYMENT_METHOD_CHOICES = (
